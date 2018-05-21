@@ -753,7 +753,8 @@ _hash_action = {(False, False, False, False): None,
 # version of this table.
 
 
-def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen):
+def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen,
+                   allow_reorder):
     # Now that dicts retain insertion order, there's no reason to use
     # an ordered dict.  I am leveraging that ordering here, because
     # derived class fields overwrite base class fields, but the order
@@ -799,6 +800,14 @@ def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen):
     # we can.
     cls_fields = [_get_field(cls, name, type)
                   for name, type in cls_annotations.items()]
+
+    # If this class defines fields which are a superset of the parent fields
+    # and has been marked as allowing reorder, then throw out the parent
+    # fields and let the subclass entirely dictate the order
+    if len(fields) > 0 and allow_reorder:
+        if set([f.name for f in cls_fields]).issuperset(set(fields.keys())):
+            fields.clear()
+
     for f in cls_fields:
         fields[f.name] = f
 
@@ -933,7 +942,7 @@ def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen):
 # underscore.  The presence of _cls is used to detect if this
 # decorator is being called with parameters or not.
 def dataclass(_cls=None, *, init=True, repr=True, eq=True, order=False,
-              unsafe_hash=False, frozen=False):
+              unsafe_hash=False, frozen=False, allow_reorder=False):
     """Returns the same class as was passed in, with dunder methods
     added based on the fields defined in the class.
 
@@ -947,7 +956,8 @@ def dataclass(_cls=None, *, init=True, repr=True, eq=True, order=False,
     """
 
     def wrap(cls):
-        return _process_class(cls, init, repr, eq, order, unsafe_hash, frozen)
+        return _process_class(cls, init, repr, eq, order, unsafe_hash, frozen,
+                              allow_reorder)
 
     # See if we're being called as @dataclass or @dataclass().
     if _cls is None:
